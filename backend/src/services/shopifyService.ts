@@ -1,23 +1,33 @@
 import { config } from '../config/environment';
 
-// Types
-interface ShopifyImage {
+interface ShopifyConfig {
+  storeDomain: string;
+  apiVersion: string;
+  storefrontAccessToken: string;
+}
+
+interface FetchArticlesParams {
+  first?: number;
+  after?: string;
+}
+
+interface BlogImage {
   url: string;
   altText?: string;
 }
 
-interface ShopifyAuthor {
+interface BlogAuthor {
   name: string;
 }
 
-interface ShopifyArticle {
+interface BlogPost {
   id: string;
   title: string;
   excerpt?: string;
   content: string;
   publishedAt: string;
-  image?: ShopifyImage;
-  author?: ShopifyAuthor;
+  image?: BlogImage;
+  author?: BlogAuthor;
   blog: {
     title: string;
   };
@@ -28,101 +38,119 @@ interface PageInfo {
   endCursor: string;
 }
 
-interface ArticleConnection {
-  edges: Array<{
-    node: ShopifyArticle;
-  }>;
+interface ArticlesResponse {
+  articles: BlogPost[];
   pageInfo: PageInfo;
 }
 
-interface ArticlesResponse {
-  data: {
-    articles: ArticleConnection;
-  };
-}
+class ShopifyServiceClass {
+  private client: any;
 
-// GraphQL Queries
-const ARTICLES_QUERY = `
-  query GetArticles($first: Int!, $after: String) {
-    articles(first: $first, after: $after, sortKey: PUBLISHED_AT, reverse: true) {
-      edges {
-        node {
-          id
-          title
-          excerpt
-          content
-          publishedAt
-          image {
-            url
-            altText
-          }
-          author {
-            name
-          }
-          blog {
-            title
+  constructor(config: ShopifyConfig) {
+    this.initialize(config);
+  }
+
+  private async initialize(config: ShopifyConfig) {
+    const { GraphQLClient } = await import('graphql-request');
+    this.client = new GraphQLClient(`https://${config.storeDomain}/api/${config.apiVersion}/graphql`, {
+      headers: {
+        'X-Shopify-Storefront-Access-Token': config.storefrontAccessToken,
+        'Content-Type': 'application/json',
+      },
+    });
+  }
+
+  async fetchArticles({ first = 100, after }: FetchArticlesParams = {}): Promise<ArticlesResponse> {
+    if (!this.client) {
+      throw new Error('ShopifyService not initialized');
+    }
+
+    const query = `
+      query GetAllBlogArticles($first: Int!, $after: String) {
+        blogs(first: 10) {
+          edges {
+            node {
+              title
+              articles(first: $first, after: $after, sortKey: PUBLISHED_AT, reverse: true) {
+                edges {
+                  node {
+                    id
+                    title
+                    excerpt
+                    content
+                    publishedAt
+                    image {
+                      url
+                      altText
+                    }
+                    author {
+                      name
+                    }
+                  }
+                }
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
+              }
+            }
           }
         }
       }
-      pageInfo {
-        hasNextPage
-        endCursor
-      }
-    }
-  }
-`;
+    `;
 
-export class ShopifyService {
-  private static readonly STOREFRONT_API_URL = `https://${config.shopify.storeDomain}/api/${config.shopify.apiVersion}/graphql.json`;
-
-  private static async makeGraphQLRequest<T>(query: string, variables: Record<string, unknown>): Promise<T> {
     try {
-      const response = await fetch(this.STOREFRONT_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Storefront-Access-Token': config.shopify.accessToken,
-        },
-        body: JSON.stringify({ query, variables }),
-      });
+      const variables = {
+        first,
+        after: after || null
+      };
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Shopify API error: ${response.statusText}. ${errorText}`);
-      }
+      const data = await this.client.request(query, variables);
+      
+      // Combine articles from all blogs
+      const allArticles = data.blogs.edges.reduce((acc: any[], blogEdge: any) => {
+        const articles = blogEdge.node.articles.edges.map((articleEdge: any) => ({
+          ...articleEdge.node,
+          blog: {
+            title: blogEdge.node.title
+          }
+        }));
+        return [...acc, ...articles];
+      }, []);
 
-      return response.json();
-    } catch (error) {
-      console.error('Shopify API request failed:', error);
-      throw error;
-    }
-  }
-
-  static async getArticles(first: number = 20, after?: string): Promise<{
-    articles: ShopifyArticle[];
-    pageInfo: PageInfo;
-  }> {
-    try {
-      const response = await this.makeGraphQLRequest<ArticlesResponse>(
-        ARTICLES_QUERY,
-        { first, after }
+      // Sort all articles by publishedAt date
+      const sortedArticles = allArticles.sort((a: BlogPost, b: BlogPost) => 
+        new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
       );
-
-      if (!response.data?.articles?.edges) {
-        return { articles: [], pageInfo: { hasNextPage: false, endCursor: '' } };
-      }
+      
+      // Get combined pageInfo
+      const hasNextPage = data.blogs.edges.some((blogEdge: any) => 
+        blogEdge.node.articles.pageInfo.hasNextPage
+      );
+      
+      const endCursor = hasNextPage 
+        ? data.blogs.edges.find((blogEdge: any) => 
+            blogEdge.node.articles.pageInfo.hasNextPage
+          )?.node.articles.pageInfo.endCursor 
+        : '';
 
       return {
-        articles: response.data.articles.edges.map(edge => edge.node),
-        pageInfo: response.data.articles.pageInfo,
+        articles: sortedArticles,
+        pageInfo: {
+          hasNextPage,
+          endCursor
+        }
       };
     } catch (error) {
-      console.error('Failed to fetch articles:', error);
-      throw error;
+      console.error('Error fetching articles from Shopify:', error);
+      throw new Error('Failed to fetch articles from Shopify');
     }
   }
+}
 
-  static async executeQuery<T>(query: string, variables: Record<string, unknown>): Promise<T> {
-    return this.makeGraphQLRequest<T>(query, variables);
-  }
-} 
+// Create and export a singleton instance
+export const shopifyService = new ShopifyServiceClass({
+  storeDomain: config.shopify.domain || '',
+  storefrontAccessToken: config.shopify.storefrontAccessToken || '',
+  apiVersion: config.shopify.apiVersion,
+}); 

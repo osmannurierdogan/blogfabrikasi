@@ -1,3 +1,5 @@
+import httpClient from './httpClient';
+
 // Types
 export interface BlogImage {
   url: string;
@@ -39,25 +41,22 @@ interface BlogPostsResponse {
 
 // Constants
 const API_ENDPOINTS = {
-  ARTICLES: 'http://localhost:3001/api/blog/articles',
+  ARTICLES: '/api/blog/articles',
 } as const;
 
 // Service
 export class BlogService {
   static async fetchBlogPosts(first: number = 20, after?: string): Promise<{ posts: BlogPost[], hasNextPage: boolean, endCursor: string }> {
     try {
-      const params = new URLSearchParams({
-        limit: first.toString(),
+      const params = {
+        limit: first,
         ...(after && { cursor: after }),
-      });
+      };
 
-      const response = await fetch(`${API_ENDPOINTS.ARTICLES}?${params}`);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch blog posts: ${response.statusText}`);
-      }
-
-      const result: ApiResponse<BlogPostsResponse> = await response.json();
+      const result = await httpClient.get<never, ApiResponse<BlogPostsResponse>>(
+        API_ENDPOINTS.ARTICLES,
+        { params }
+      );
 
       if (!result.success || !result.data) {
         throw new Error(result.error || 'Failed to fetch blog posts');
@@ -73,6 +72,4 @@ export class BlogService {
       throw error;
     }
   }
-}
-
-export type { BlogPost }; 
+} 

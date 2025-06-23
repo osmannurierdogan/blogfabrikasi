@@ -1,105 +1,80 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { BlogService, type BlogPost } from '@/services/blogService';
+import { useEffect, useState } from 'react';
+import { BlogService, BlogPost } from '../services/blogService';
 import { BlogCard } from './BlogCard';
 
-interface BlogPostsState {
-  posts: BlogPost[];
-  hasNextPage: boolean;
-  endCursor: string | null;
-}
-
-const INITIAL_STATE: BlogPostsState = {
-  posts: [],
-  hasNextPage: false,
-  endCursor: null,
-};
-
-const POSTS_PER_PAGE = 20;
-
-const BlogPosts = () => {
-  const [state, setState] = useState<BlogPostsState>(INITIAL_STATE);
+export default function BlogPosts() {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [endCursor, setEndCursor] = useState<string | null>(null);
 
-  const fetchPosts = useCallback(async (cursor?: string) => {
+  const fetchPosts = async (cursor?: string) => {
     try {
+      setLoading(true);
       setError(null);
-      const { posts: newPosts, hasNextPage, endCursor } = await BlogService.fetchBlogPosts(POSTS_PER_PAGE, cursor);
+      const { posts: newPosts, hasNextPage, endCursor: newCursor } = await BlogService.fetchBlogPosts(20, cursor);
       
-      setState(prevState => ({
-        posts: cursor ? [...prevState.posts, ...newPosts] : newPosts,
-        hasNextPage,
-        endCursor,
-      }));
+      setPosts(prev => cursor ? [...prev, ...newPosts] : newPosts);
+      setHasMore(hasNextPage);
+      setEndCursor(newCursor);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch blog posts');
     } finally {
       setLoading(false);
-      setLoadingMore(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchPosts();
-  }, [fetchPosts]);
+  }, []);
 
-  const handleLoadMore = useCallback(async () => {
-    if (loadingMore || !state.hasNextPage || !state.endCursor) return;
-    setLoadingMore(true);
-    await fetchPosts(state.endCursor);
-  }, [loadingMore, state.hasNextPage, state.endCursor, fetchPosts]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-center p-4">Loading blog posts...</div>
-      </div>
-    );
-  }
+  const loadMore = () => {
+    if (endCursor) {
+      fetchPosts(endCursor);
+    }
+  };
 
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-center p-4 text-red-500">
-          <p className="font-semibold mb-2">Error loading blog posts</p>
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!state.posts.length) {
-    return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-center p-4">No blog posts found.</div>
+      <div className="text-center py-10">
+        <p className="text-red-500">{error}</p>
+        <button 
+          onClick={() => fetchPosts()} 
+          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+        >
+          Try Again
+        </button>
       </div>
     );
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Blog Posts</h1>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {state.posts.map((post) => (
+        {posts.map((post) => (
           <BlogCard key={post.id} post={post} />
         ))}
       </div>
-      {state.hasNextPage && (
-        <div className="text-center mt-8">
+      
+      {loading && (
+        <div className="text-center py-4">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
+        </div>
+      )}
+      
+      {!loading && hasMore && (
+        <div className="text-center py-4">
           <button
-            onClick={handleLoadMore}
-            disabled={loadingMore}
-            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded disabled:opacity-50 transition-colors duration-200"
+            onClick={loadMore}
+            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
           >
-            {loadingMore ? 'Loading more posts...' : 'Load more posts'}
+            Load More
           </button>
         </div>
       )}
     </div>
   );
-};
-
-export default BlogPosts; 
+} 
