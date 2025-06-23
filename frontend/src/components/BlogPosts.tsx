@@ -1,80 +1,81 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { BlogService, BlogPost } from '../services/blogService';
+import { useState, forwardRef, useImperativeHandle } from 'react';
+import { BlogService, BlogPost } from '@/services/blogService';
 import { BlogCard } from './BlogCard';
 
-export default function BlogPosts() {
-  const [posts, setPosts] = useState<BlogPost[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [endCursor, setEndCursor] = useState<string | null>(null);
+interface BlogPostsProps {
+  shopifyCredentials: {
+    shopifyDomain: string;
+    accessToken: string;
+    apiVersion?: string;
+  };
+}
 
-  const fetchPosts = async (cursor?: string) => {
+export interface BlogPostsRef {
+  fetchPosts: () => Promise<void>;
+  getAllPosts: () => BlogPost[];
+}
+
+const BlogPosts = forwardRef<BlogPostsRef, BlogPostsProps>(({ shopifyCredentials }, ref) => {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPosts = async () => {
     try {
       setLoading(true);
       setError(null);
-      const { posts: newPosts, hasNextPage, endCursor: newCursor } = await BlogService.fetchBlogPosts(20, cursor);
-      
-      setPosts(prev => cursor ? [...prev, ...newPosts] : newPosts);
-      setHasMore(hasNextPage);
-      setEndCursor(newCursor);
+      const result = await BlogService.fetchBlogPosts(100, undefined, shopifyCredentials);
+      setPosts(result.posts);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch blog posts');
+      setError('Blog yazıları yüklenirken bir hata oluştu.');
+      console.error('Error fetching blog posts:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
+  const getAllPosts = () => posts;
 
-  const loadMore = () => {
-    if (endCursor) {
-      fetchPosts(endCursor);
-    }
-  };
+  useImperativeHandle(ref, () => ({
+    fetchPosts,
+    getAllPosts
+  }));
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-[200px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   if (error) {
     return (
-      <div className="text-center py-10">
-        <p className="text-red-500">{error}</p>
-        <button 
-          onClick={() => fetchPosts()} 
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-        >
-          Try Again
-        </button>
+      <div className="bg-red-50 border border-red-200 rounded-md p-4 text-red-700">
+        {error}
+      </div>
+    );
+  }
+
+  if (posts.length === 0) {
+    return (
+      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 text-yellow-700">
+        Henüz blog yazıları yüklenmedi. Lütfen "Blog Yazılarını Getir" butonuna tıklayın.
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {posts.map((post) => (
-          <BlogCard key={post.id} post={post} />
-        ))}
-      </div>
-      
-      {loading && (
-        <div className="text-center py-4">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-        </div>
-      )}
-      
-      {!loading && hasMore && (
-        <div className="text-center py-4">
-          <button
-            onClick={loadMore}
-            className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-          >
-            Load More
-          </button>
-        </div>
-      )}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {posts.map((post) => (
+        <BlogCard key={post.id} post={post} />
+      ))}
     </div>
   );
-} 
+});
+
+BlogPosts.displayName = 'BlogPosts';
+
+export default BlogPosts; 

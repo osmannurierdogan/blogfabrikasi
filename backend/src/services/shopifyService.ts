@@ -50,7 +50,7 @@ class ShopifyServiceClass {
     this.initialize(config);
   }
 
-  private async initialize(config: ShopifyConfig) {
+  public async initialize(config: ShopifyConfig) {
     const { GraphQLClient } = await import('graphql-request');
     this.client = new GraphQLClient(`https://${config.storeDomain}/api/${config.apiVersion}/graphql`, {
       headers: {

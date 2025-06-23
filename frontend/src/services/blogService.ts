@@ -39,6 +39,12 @@ interface BlogPostsResponse {
   pageInfo: PageInfo;
 }
 
+interface ShopifyCredentials {
+  shopifyDomain: string;
+  accessToken: string;
+  apiVersion?: string;
+}
+
 // Constants
 const API_ENDPOINTS = {
   ARTICLES: '/api/blog/articles',
@@ -46,11 +52,20 @@ const API_ENDPOINTS = {
 
 // Service
 export class BlogService {
-  static async fetchBlogPosts(first: number = 20, after?: string): Promise<{ posts: BlogPost[], hasNextPage: boolean, endCursor: string }> {
+  static async fetchBlogPosts(
+    first: number = 100,
+    after?: string,
+    credentials?: ShopifyCredentials
+  ): Promise<{ posts: BlogPost[], hasNextPage: boolean, endCursor: string }> {
     try {
       const params = {
         limit: first,
         ...(after && { cursor: after }),
+        ...(credentials && {
+          domain: credentials.shopifyDomain,
+          token: credentials.accessToken,
+          version: credentials.apiVersion,
+        }),
       };
 
       const result = await httpClient.get<never, ApiResponse<BlogPostsResponse>>(
@@ -59,7 +74,7 @@ export class BlogService {
       );
 
       if (!result.success || !result.data) {
-        throw new Error(result.error || 'Failed to fetch blog posts');
+        throw new Error(result.error || 'Blog yazıları yüklenemedi');
       }
 
       return {

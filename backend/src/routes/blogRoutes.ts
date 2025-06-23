@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import { BlogController } from '../controllers/blogController';
+import { getArticles } from '../controllers/blogController';
 
 const router = Router();
 
-router.get('/articles', BlogController.getArticles);
+router.get('/articles', getArticles);
 
 export default router; 
