@@ -47,7 +47,7 @@ interface ShopifyCredentials {
 
 // Constants
 const API_ENDPOINTS = {
-  ARTICLES: '/api/blog/articles',
+  ARTICLES: '/blog/articles',
 } as const;
 
 // Service
