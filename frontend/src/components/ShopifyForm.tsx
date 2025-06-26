@@ -10,9 +10,10 @@ interface ShopifyFormProps {
   }) => void;
   onFetchPosts: () => Promise<void>;
   onExportToJsonl?: () => Promise<void>;
+  onExportToTxt?: () => Promise<void>;
 }
 
-export default function ShopifyForm({ onSubmit, onFetchPosts, onExportToJsonl }: ShopifyFormProps) {
+export default function ShopifyForm({ onSubmit, onFetchPosts, onExportToJsonl, onExportToTxt }: ShopifyFormProps) {
   const [formData, setFormData] = useState({
     shopifyDomain: '',
     accessToken: '',
@@ -68,7 +69,7 @@ export default function ShopifyForm({ onSubmit, onFetchPosts, onExportToJsonl }:
               name="accessToken"
               value={formData.accessToken}
               onChange={handleChange}
-              placeholder="shpat_xxxxx..."
+              placeholder="xxxxxxx..."
               className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
               required
             />
@@ -97,6 +98,15 @@ export default function ShopifyForm({ onSubmit, onFetchPosts, onExportToJsonl }:
             className="px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-all duration-200 font-medium text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             JSONL Olarak İndir
+          </button>
+
+          <button
+            type="button"
+            onClick={onExportToTxt}
+            disabled={!onExportToTxt}
+            className="px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 font-medium text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            TXT Olarak İndir
           </button>
         </div>
       </form>
